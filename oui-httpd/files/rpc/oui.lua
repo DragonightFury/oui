@@ -1,11 +1,14 @@
-local uci = require "uci"
 local sqlite3 = require "lsqlite3"
 local utils = require "oui.utils"
 local cjson = require "oui.json"
+local rpc = require "oui.rpc"
+local fs = require "oui.fs"
+local uci = require "uci"
 
 local M = {}
 
-local RPC_OUI_MENU_FILES = "/usr/share/oui/menu.d/*.json"
+local RPC_OUI_MENU_FILES_PATH = "/usr/share/oui/menu.d"
+local RPC_OUI_LOCALES_PATH = "/www/i18n"
 
 local function menu_files(files)
     for _, file in ipairs(files) do
@@ -27,7 +30,7 @@ function M.set_lang(params)
     local c = uci.cursor()
 
     if type(params.lang) ~= "string" then
-        return nil, __rpc.RPC_ERROR_PARAMS
+        return rpc.ERROR_CODE_INVALID_PARAMS
     end
 
     c:set("oui", "main", "lang", params.lang)
@@ -36,32 +39,12 @@ function M.set_lang(params)
     return { lang = c:get("oui", "main", "lang") }
 end
 
-local function menu_access(menu)
-    local s = __oui_session
-
-    -- The admin acl group is always allowed
-    if s.aclgroup == "admin" then return true end
-
-    local db = sqlite3.open("/etc/oui-httpd/oh.db")
-    local sql = string.format("SELECT permissions FROM acl_%s WHERE scope = 'menu' AND entry = '%s'", s.aclgroup, menu)
-    local perm = ""
-
-    db:exec(sql, function(udata, cols, values, names)
-        perm = values[1]
-        return 1
-    end)
-
-    db:close()
-
-    return perm:find("r") ~= nil
-end
-
 function M.menu(params)
     local menus = {}
 
-    local f = io.popen("ls " .. RPC_OUI_MENU_FILES .. " 2>/dev/null")
-    if f then
-        for file in f:lines() do
+    for name in fs.dir(RPC_OUI_MENU_FILES_PATH) do
+        if name:match("%.json$") then
+            local file = RPC_OUI_MENU_FILES_PATH .. "/" .. name
             local menu = cjson.decode(utils.readfile(file))
 
             for path, item in pairs(menu) do
@@ -76,12 +59,11 @@ function M.menu(params)
                     end
                 end
 
-                if files and menu_access("/" .. path) then
+                if files and rpc.access("menu", "/" .. path, "r") then
                     menus[path] = tmp
                 end
             end
         end
-        f:close()
     end
 
     return {menu = menus}
@@ -91,18 +73,17 @@ function M.load_locales(params)
     local locales = {}
 
     if type(params.locale) ~= "string" then
-        return nil, __rpc.RPC_ERROR_PARAMS
+        return rpc.ERROR_CODE_INVALID_PARAMS
     end
 
-    local cmd = string.format("ls /www/i18n/*.%s.json 2>/dev/null", params.locale)
+    local match = string.format("%%.%s.json$", params.locale):gsub("%-", "%%-")
 
-    local f = io.popen(cmd)
-        if f then
-        for file in f:lines() do
+    for name in fs.dir(RPC_OUI_LOCALES_PATH) do
+        if name:match(match) then
+            local file = RPC_OUI_LOCALES_PATH .. "/" .. name
             local locale = cjson.decode(utils.readfile(file))
             locales[#locales + 1] = locale
         end
-        f:close()
     end
 
     return locales
@@ -112,7 +93,7 @@ local function set_password(params)
     local username, password = params.username, params.password
 
     if type(username) ~= "string" or  type(password) ~= "string" then
-        return nil, __rpc.RPC_ERROR_PARAMS
+        return rpc.ERROR_CODE_INVALID_PARAMS
     end
 
     local db = sqlite3.open("/etc/oui-httpd/oh.db")
@@ -133,10 +114,10 @@ local function set_password(params)
 end
 
 function M.set_password(params)
-    local s = __oui_session
+    local s = rpc.session()
 
     if s.aclgroup ~= "admin" and params.username ~= s.username then
-        return nil, __rpc.RPC_ERROR_ACCESS
+        return rpc.ERROR_CODE_ACCESS
     end
     return set_password(params)
 end
@@ -151,7 +132,7 @@ end
 
 function M.first_set(params)
     if not M.first_login() then
-        return nil, __rpc.RPC_ERROR_ACCESS
+        return rpc.ERROR_CODE_ACCESS
     end
 
     local c = uci.cursor()

@@ -22,95 +22,18 @@
  * SOFTWARE.
  */
 
-#include <sys/stat.h>
-#include <stdlib.h>
+#include <netinet/in.h>
 #include <string.h>
-#include <unistd.h>
-#include <stdio.h>
 
-static int file_is_executable(const char *name)
+#include "utils.h"
+
+bool is_loopback_addr(const struct sockaddr *addr)
 {
-    struct stat s;
-    return (!access(name, X_OK) && !stat(name, &s) && S_ISREG(s.st_mode));
-}
-
-static char *last_char_is(const char *s, int c)
-{
-    if (s && *s) {
-        size_t sz = strlen(s) - 1;
-        s += sz;
-        if ((unsigned char) *s == c)
-            return (char *) s;
-    }
-    return NULL;
-}
-
-static char *concat_path_file(const char *path, const char *filename)
-{
-    char *strp;
-    char *lc;
-
-
-    if (!path)
-        path = "";
-    lc = last_char_is(path, '/');
-    while (*filename == '/')
-        filename++;
-    if (asprintf(&strp, "%s%s%s", path, (lc == NULL ? "/" : ""), filename) < 0)
-        return NULL;
-    return strp;
-}
-
-static char *find_executable(const char *filename, char **path)
-{
-    char *p, *n;
-
-    p = *path;
-    while (p) {
-        int ex;
-
-        n = strchr(p, ':');
-        if (n) *n = '\0';
-        p = concat_path_file(p[0] ? p : ".", filename);
-        if (!p)
-            break;
-        ex = file_is_executable(p);
-        if (n) *n++ = ':';
-        if (ex) {
-            *path = n;
-            return p;
-        }
-        free(p);
-        p = n;
-    } /* on loop exit p == NULL */
-    return p;
-}
-
-int which(const char *prog)
-{
-    char buf[] = "/sbin:/usr/sbin:/bin:/usr/bin";
-    char *env_path;
-    int missing = 1;
-
-    env_path = getenv("PATH");
-    if (!env_path)
-        env_path = buf;
-
-    /* If file contains a slash don't use PATH */
-    if (strchr(prog, '/')) {
-        if (file_is_executable(prog))
-            missing = 0;
+    if (addr->sa_family == AF_INET) {
+        struct sockaddr_in *sin = (struct sockaddr_in *)addr;
+        return sin->sin_addr.s_addr == htonl(INADDR_LOOPBACK);
     } else {
-        char *path;
-        char *p;
-
-        path = env_path;
-
-        while ((p = find_executable(prog, &path)) != NULL) {
-            missing = 0;
-            free(p);
-            break;
-        }
+        struct sockaddr_in6 *sin6 = (struct sockaddr_in6 *)addr;
+        return !memcmp(&sin6->sin6_addr, &in6addr_loopback, sizeof(in6addr_loopback));
     }
-    return missing;
 }

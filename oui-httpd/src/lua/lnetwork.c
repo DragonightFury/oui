@@ -22,86 +22,18 @@
  * SOFTWARE.
  */
 
-#include <sys/statvfs.h>
-#include <libubox/md5.h>
-#include <uhttpd/log.h>
 #include <arpa/inet.h>
-#include <stdbool.h>
 #include <lauxlib.h>
-#include <unistd.h>
 #include <string.h>
 #include <stdlib.h>
 
-static int lua_md5sum(lua_State *L)
-{
-    const char *file = luaL_checkstring(L, 1);
-    char md5[33] = "";
-    uint8_t buf[16];
-    int i;
+#include "lua_compat.h"
 
-    if (md5sum(file, buf) < 0) {
-        lua_pushnil(L);
-        return 1;
-    }
-
-    for (i = 0; i < 16; i++)
-        sprintf(md5 + i * 2, "%02x", buf[i]);
-
-    lua_pushstring(L, md5);
-
-    return 1;
-}
-
-static int lua_md5(lua_State *L)
-{
-    int n = lua_gettop(L);
-    md5_ctx_t ctx;
-    char md5[33] = "";
-    uint8_t buf[16];
-    const char *s;
-    size_t len;
-    int i;
-
-    md5_begin(&ctx);
-
-    for (i = 1; i <= n; i++) {
-        s = luaL_checklstring(L, i, &len);
-        md5_hash(s, len, &ctx);
-    }
-
-    md5_end(buf, &ctx);
-
-    for (i = 0; i < 16; i++)
-        sprintf(md5 + i * 2, "%02x", buf[i]);
-
-    lua_pushstring(L, md5);
-
-    return 1;
-}
-
-static int lua_statvfs(lua_State *L)
-{
-    const char *path = lua_tostring(L, 1);
-    struct statvfs s;
-
-    if (!path) {
-        lua_pushnil(L);
-        return 1;
-    }
-
-    if (statvfs(path, &s)) {
-        lua_pushnil(L);
-        return 1;
-    }
-
-    lua_pushinteger(L, s.f_blocks * s.f_frsize);
-    lua_pushinteger(L, s.f_bfree * s.f_frsize);
-    lua_pushinteger(L, (s.f_blocks - s.f_bfree) * s.f_frsize);
-
-    return 3;
-}
-
-static int lua_parse_route_addr(lua_State *L)
+/*
+ * hexaddr("000011AC")
+ * hexaddr("000011AC", "0000FFFF")
+ */
+static int lua_hexaddr(lua_State *L)
 {
     const char *addr = lua_tostring(L, 1);
     const char *mask = lua_tostring(L, 2);
@@ -130,7 +62,7 @@ static int lua_parse_route_addr(lua_State *L)
     return 1;
 }
 
-static int lua_parse_route6_addr(lua_State *L)
+static int lua_hex6addr(lua_State *L)
 {
     const char *addr = lua_tostring(L, 1);
     const char *mask = lua_tostring(L, 2);
@@ -161,36 +93,15 @@ static int lua_parse_route6_addr(lua_State *L)
     return 1;
 }
 
-static int lua_exists(lua_State *L)
-{
-    const char *file = luaL_checkstring(L, 1);
-
-    if (access(file, F_OK))
-        lua_pushboolean(L, false);
-    else
-        lua_pushboolean(L, true);
-
-    return 1;
-}
-
 static const luaL_Reg regs[] = {
-    {"md5sum",            lua_md5sum},
-    {"md5",               lua_md5},
-    {"statvfs",           lua_statvfs},
-    {"parse_route_addr",  lua_parse_route_addr},
-    {"parse_route6_addr", lua_parse_route6_addr},
-    {"exists", lua_exists},
+    {"hexaddr",  lua_hexaddr},
+    {"hex6addr", lua_hex6addr},
     {NULL, NULL}
 };
 
-int luaopen_oui_utils_core(lua_State *L)
+int luaopen_oui_network(lua_State *L)
 {
-#if LUA_VERSION_NUM <= 501
-    luaL_register(L, "utils", regs);
-#else
     luaL_newlib(L, regs);
-    lua_pushvalue(L, -1);
-    lua_setglobal(L, "utils");
-#endif
+
     return 1;
 }

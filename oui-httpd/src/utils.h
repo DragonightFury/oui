@@ -25,26 +25,11 @@
 #ifndef __UTILS_H
 #define __UTILS_H
 
-#include <jansson.h>
+#include <sys/socket.h>
+#include <stdbool.h>
 
-static inline const char *json_object_get_string(const json_t *object, const char *key)
-{
-    json_t *val = json_object_get(object, key);
+#define __init __attribute__((constructor))
 
-    if (!json_is_string(val))
-        return NULL;
-    return json_string_value(val);
-}
-
-static inline const char *json_array_get_string(const json_t *array, int index)
-{
-    json_t *val = json_array_get(array, index);
-
-    if (!json_is_string(val))
-        return NULL;
-    return json_string_value(val);
-}
-
-int which(const char *prog);
+bool is_loopback_addr(const struct sockaddr *addr);
 
 #endif
