@@ -1,5 +1,4 @@
 local net = require "oui.network"
-local utils = require "oui.utils"
 local uci = require "uci"
 
 local M = {}
@@ -70,7 +69,7 @@ function M.dhcp6_leases()
             }
         end
     else
-        local r, lines = pcall(io.lines, dnsmasq_leasefile())
+        r, lines = pcall(io.lines, dnsmasq_leasefile())
         if r then
             for line in lines do
                 local ts, mac, addr, name, duid  = line:match("(%S+) +(%S+) +(%S+) +(%S+) +(%S+)")

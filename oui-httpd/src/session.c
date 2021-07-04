@@ -22,7 +22,6 @@
  * SOFTWARE.
  */
 
-#include <libubox/avl-cmp.h>
 #include <uhttpd/log.h>
 #include <sqlite3.h>
 #include <string.h>
@@ -97,12 +96,12 @@ static struct session *session_create(int timeout, const char *username, const c
     struct session *s;
 
     if (strlen(username) > MAX_USERNAME_LEN) {
-        uh_log_err("username '%s' too long, more than %d characters\n", username, MAX_USERNAME_LEN);
+        log_err("username '%s' too long, more than %d characters\n", username, MAX_USERNAME_LEN);
         return NULL;
     }
 
     if (strlen(aclgroup) > MAX_ACLGROUP_LEN) {
-        uh_log_err("aclgroup '%s' too long, more than %d characters\n", aclgroup, MAX_ACLGROUP_LEN);
+        log_err("aclgroup '%s' too long, more than %d characters\n", aclgroup, MAX_ACLGROUP_LEN);
         return NULL;
     }
 
@@ -110,8 +109,10 @@ static struct session *session_create(int timeout, const char *username, const c
     if (!s)
         return NULL;
 
-    if (generate_sid(s->id))
+    if (generate_sid(s->id)) {
+        free(s);
         return NULL;
+    }
 
     s->avl.key = s->id;
     s->timeout = timeout;
